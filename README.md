@@ -1,7 +1,11 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+# Pet Friendly Senior Living Near Me Project
+## 2026 Developed by Gabriel Rosales Montes
+### For Atlas Senior Living
 
+
+## Getting Started
 First, run the development server:
 
 ```bash
