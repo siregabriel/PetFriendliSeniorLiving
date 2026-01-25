@@ -5,11 +5,16 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+// 👇 Importamos el botón para mantener consistencia
+import BotonVolver from '@/components/BotonVolver';
 
 export default function Publicar() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [archivo, setArchivo] = useState<File | null>(null);
+  
+  // 👇 Estado para guardar el ID del usuario dueño
+  const [userId, setUserId] = useState<string | null>(null);
 
   // --- LÓGICA DE AUTOCOMPLETADO ---
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -30,6 +35,21 @@ export default function Publicar() {
   });
 
   const [mascotas, setMascotas] = useState<string[]>([]);
+
+  // 👇 1. VERIFICAR SI EL USUARIO ESTÁ LOGUEADO AL ENTRAR
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        // Si no hay usuario, mandar al login
+        alert('You must be logged in to publish a community.');
+        router.push('/login');
+      } else {
+        setUserId(user.id);
+      }
+    };
+    checkUser();
+  }, [router]);
 
   // Función para buscar sugerencias en Mapbox
   const fetchCitySuggestions = async (query: string) => {
@@ -90,6 +110,7 @@ export default function Publicar() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userId) return; // Doble seguridad
     setLoading(true);
 
     try {
@@ -119,7 +140,8 @@ export default function Publicar() {
             destacada: false,
             imagen_url: imageUrlFinal,
             aprobado: false, 
-            pagado: false    
+            pagado: false,
+            user_id: userId // 👈 VINCULAMOS AL DUEÑO AQUÍ
         }
         ])
         .select()
@@ -196,7 +218,8 @@ export default function Publicar() {
 
         } else {
             alert('Property submitted successfully! 🥳\n\nYour publication is free and will pass through a moderator before appearing on the map.');
-            router.push('/');
+            // 👇 Redirigir al Dashboard personal
+            router.push('/perfil');
             router.refresh();
         }
 
@@ -207,12 +230,22 @@ export default function Publicar() {
     }
   };
 
+  // 👇 Evita mostrar el formulario si no hay usuario (Loading...)
+  if (!userId) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading...</div>;
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6 flex justify-center items-center">
-      <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-2xl border border-gray-100">
+    <div className="min-h-screen bg-gray-50 p-6 flex justify-center items-center relative">
+      
+      {/* Botón Volver */}
+      <div className="absolute top-4 left-4">
+         <BotonVolver />
+      </div>
+
+      <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-2xl border border-gray-100 mt-10">
         <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold text-gray-800 tracking-tight">Publish New Community</h1>
-            <Link href="/" className="text-sm text-gray-500 hover:text-blue-600 transition">Cancel</Link>
+            {/* El botón Cancel ahora es redundante con BotonVolver, pero lo dejamos por consistencia de diseño */}
+            <Link href="/perfil" className="text-sm text-gray-500 hover:text-blue-600 transition">Cancel</Link>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -342,7 +375,7 @@ export default function Publicar() {
                 type="submit" 
                 onClick={() => setTipoPublicacion('gratis')}
                 disabled={loading}
-                className="flex-1 bg-white text-gray-600 font-bold py-4 rounded-xl hover:bg-gray-50 transition border border-gray-200 shadow-sm"
+                className="flex-1 bg-white cursor-pointer text-gray-600 font-bold py-4 rounded-xl hover:bg-gray-50 transition border border-gray-200 shadow-sm"
              >
                 Publish Free
                 <span className="block text-[10px] font-medium opacity-50 mt-1 uppercase tracking-tight">Standard review (24-48h)</span>
@@ -352,16 +385,14 @@ export default function Publicar() {
                 type="submit" 
                 onClick={() => setTipoPublicacion('pago')}
                 disabled={loading}
-                className="flex-1 bg-gray-900 text-white font-bold py-4 rounded-xl hover:bg-black transition shadow-lg disabled:opacity-50"
+                className="flex-1 bg-[#2a7d50] hover:bg-[#276342] cursor-pointer text-white font-bold py-4 rounded-xl transition shadow-lg disabled:opacity-50"
              >
                 {loading && tipoPublicacion === 'pago' ? 'Processing...' : 'Pay $4.99 USD'}
                 <span className="block text-[10px] font-medium opacity-70 mt-1 uppercase tracking-tight">✨ Highlighted Listing</span>
+                <span className="block text-[10px] font-medium opacity-70 mt-1 uppercase tracking-tight">Listed in 12H. First positions.</span>
              </button>
           </div>
-          
-          <p className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-6">
-            Senior Pet Living Directory Service
-          </p>
+        
         </form>
       </div>
     </div>

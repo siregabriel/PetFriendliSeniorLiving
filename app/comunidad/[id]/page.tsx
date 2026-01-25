@@ -127,14 +127,14 @@ export default async function DetalleComunidad({ params }: { params: Promise<{ i
           <h1 className="text-3xl md:text-6xl font-extrabold mb-2 text-white tracking-tight leading-tight drop-shadow-md break-words">
             {comunidad.nombre}
           </h1>
-          <p className="text-lg md:text-2xl text-white/90 font-medium flex items-center gap-2">
+          <p className="text-lg md:text-2xl text-white/90 font-medium flex items-center gap-2 pb-12">
             <span className="opacity-60 text-base">📍</span> {comunidad.ciudad}, {comunidad.estado}
           </p>
         </div>
       </div>
 
       {/* Tarjeta de Contenido Principal */}
-      <div className="max-w-6xl mx-auto px-4 md:px-6 -mt-8 md:-mt-16 relative z-20">
+      <div className="max-w-6xl mx-auto px-4 md:px-6 -mt-8 md:-mt-16 relative z-20 pt-10">
         <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-2xl shadow-gray-200/50 border border-gray-100 p-6 md:p-12">
           
           {/* SECCIÓN DE DATOS PRINCIPALES */}
@@ -142,7 +142,7 @@ export default async function DetalleComunidad({ params }: { params: Promise<{ i
             
             {/* Precio */}
             <div>
-              <p className="text-gray-400 text-[9px] md:text-[10px] uppercase tracking-[0.2em] font-black mb-1 md:mb-2">Starting at</p>
+              <p className="text-gray-400 text-[13px] md:text-[13px] uppercase tracking-[0em] font-black mb-1 md:mb-2">Starting at</p>
               <p className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight">
                 ${comunidad.precio_desde?.toLocaleString()} <span className="text-base md:text-lg font-medium text-gray-400">/ mo</span>
               </p>

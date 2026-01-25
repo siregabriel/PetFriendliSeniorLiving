@@ -206,11 +206,11 @@ export default function AdminDashboard() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 to: formData.email,
-                subject: '🎉 Your Property is now LIVE on Senior Pet Living!',
+                subject: '🎉 Your Community is now LIVE on Senior Pet Living!',
                 html: `
                   <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 20px;">
                     <h1 style="color: #111;">Good news!</h1>
-                    <p>Your property <strong>"${formData.nombre}"</strong> has been reviewed and approved by our team.</p>
+                    <p>Your Community <strong>"${formData.nombre}"</strong> has been reviewed and approved by our team.</p>
                     <p>It is now visible to seniors looking for pet-friendly homes on our map.</p>
                     <p style="color: #888; font-size: 12px; margin-top: 30px;">Thank you for being part of Senior Pet Living.</p>
                   </div>
@@ -244,10 +244,10 @@ export default function AdminDashboard() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 to: comunidad.email,
-                subject: '🎉 Your Property is now LIVE on Senior Pet Living!',
+                subject: '🎉 Your Community is now LIVE on Senior Pet Living!',
                 html: `
                   <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 20px;">
-                    <h1 style="color: #111;">Your Property is Approved!</h1>
+                    <h1 style="color: #111;">Your Community is Approved!</h1>
                     <p>Your listing <strong>"${comunidad.nombre}"</strong> is now live on our map.</p>
                     <p style="color: #888; font-size: 12px; margin-top: 30px;">Senior Pet Living Team</p>
                   </div>
@@ -335,13 +335,13 @@ export default function AdminDashboard() {
                     onClick={() => setVistaActual('tabla')} 
                     className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${vistaActual === 'tabla' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                   <IconList /> Property
+                   <IconList /> Communities
                 </button>
                 <button 
                     onClick={() => { setVistaActual('formulario'); setEditingId(null); setFormData(initialFormState); }} 
                     className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${vistaActual === 'formulario' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                   <IconPlus /> New Property
+                   <IconPlus /> New Community
                 </button>
                 {miRol === 'super_admin' && (
                     <button 
@@ -445,7 +445,7 @@ export default function AdminDashboard() {
             
             <div className="flex justify-between items-start mb-10 pb-6 border-b border-gray-50">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{editingId ? 'Edit Property' : 'New Listing'}</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{editingId ? 'Edit Community' : 'New Community'}</h2>
                     <p className="text-gray-400 text-sm mt-1">Fill in the details below to publish.</p>
                 </div>
                 {editingId && (
@@ -466,7 +466,7 @@ export default function AdminDashboard() {
                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Core Details</h3>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Property Name</label>
+                            <label className="text-sm font-medium text-gray-700">Community Name</label>
                             <input type="text" placeholder="e.g. Sunset Villa" required className="w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} />
                         </div>
                         <div className="space-y-2">
@@ -560,7 +560,7 @@ export default function AdminDashboard() {
 
                    <div className="space-y-2">
                        <label className="text-sm font-medium text-gray-700">Description</label>
-                       <textarea rows={4} className="w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none resize-none" placeholder="Describe the property..." value={formData.descripcion} onChange={e => setFormData({...formData, descripcion: e.target.value})} />
+                       <textarea rows={4} className="w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none resize-none" placeholder="Describe the Community..." value={formData.descripcion} onChange={e => setFormData({...formData, descripcion: e.target.value})} />
                    </div>
                </div>
                
@@ -585,14 +585,14 @@ export default function AdminDashboard() {
             {comunidades.length === 0 ? (
                 <div className="p-20 text-center">
                     <div className="inline-block p-4 rounded-full bg-gray-50 text-gray-300 mb-4"><IconList /></div>
-                    <p className="text-gray-500 text-lg">No properties found.</p>
+                    <p className="text-gray-500 text-lg">No communities found.</p>
                 </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                     <thead className="bg-gray-50/50">
                     <tr>
-                        <th className="px-8 py-5 text-xs font-bold text-gray-400 uppercase tracking-wider">Property</th>
+                        <th className="px-8 py-5 text-xs font-bold text-gray-400 uppercase tracking-wider">Community</th>
                         <th className="px-6 py-5 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Plan</th>
                         <th className="px-6 py-5 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Status</th>
                         <th className="px-8 py-5 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Actions</th>

@@ -113,6 +113,9 @@ function ContenidoPrincipal() {
   // --- ESTADOS PARA SUGERENCIAS DE BÚSQUEDA ---
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  
+  // --- ESTADO PARA GEOLOCALIZACIÓN ---
+  const [locating, setLocating] = useState(false);
 
   // Función para buscar sugerencias en Mapbox
   const fetchCitySuggestions = async (query: string) => {
@@ -133,6 +136,66 @@ function ContenidoPrincipal() {
       console.error("Error fetching suggestions:", err);
     }
   };
+
+  // --- FUNCIÓN DE GEOLOCALIZACIÓN (AJUSTADA: AUTO O MANUAL) ---
+  const detectarUbicacion = (esManual = false) => {
+    if (!navigator.geolocation) {
+      if (esManual) alert("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setLocating(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+
+        try {
+          // Consultamos a Mapbox: "¿Qué ciudad es esta lat/long?"
+          const res = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${MAPBOX_TOKEN}&types=place,postcode`
+          );
+          const data = await res.json();
+
+          if (data.features && data.features.length > 0) {
+            const cityFeature = data.features.find((f: any) => f.place_type.includes('place'));
+            // Usamos solo el nombre de la ciudad para el buscador
+            const ciudad = cityFeature ? cityFeature.text : '';
+
+            if (ciudad) {
+                setBusqueda(ciudad);
+                setCiudadMapa(null); // Limpiamos filtro mapa para enfocar en texto
+            } else if (esManual) {
+                alert("Could not detect city name.");
+            }
+
+          } else if (esManual) {
+            alert("Could not detect city name.");
+          }
+        } catch (error) {
+          console.error("Error reverse geocoding:", error);
+          if (esManual) alert("Error finding your location.");
+        } finally {
+          setLocating(false);
+        }
+      },
+      (error) => {
+        console.error("Error getting location:", error);
+        // Solo mostramos alerta si el usuario lo pidió manualmente (botón)
+        if (esManual) alert("Unable to retrieve your location. Please allow GPS access.");
+        setLocating(false);
+      }
+    );
+  };
+
+  // --- EFECTO: GEOLOCALIZACIÓN AUTOMÁTICA AL INICIO ---
+  useEffect(() => {
+    // Si no hay búsqueda en URL ni en el estado, intentamos geolocalizar (modo silencioso)
+    if (!busqueda && !searchParams.get('q')) {
+      detectarUbicacion(false);
+    }
+  }, []); // Se ejecuta una sola vez al montar
 
   // Carga de datos inicial
   useEffect(() => {
@@ -197,12 +260,12 @@ function ContenidoPrincipal() {
           </h1>
           <div className="flex flex-col md:flex-row gap-4">
             
-            {/* --- INPUT DE BÚSQUEDA CON AUTOCOMPLETADO --- */}
+            {/* --- INPUT DE BÚSQUEDA CON AUTOCOMPLETADO Y GEOLOCALIZACIÓN --- */}
             <div className="relative flex-[2]">
                 <input 
                   type="text"
                   placeholder="🔍 Search by name or city..."
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-800"
+                  className="w-full p-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-800"
                   value={busqueda}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -215,6 +278,20 @@ function ContenidoPrincipal() {
                   // Retrasamos el blur para permitir el click en la sugerencia
                   onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                 />
+
+                {/* Botón GPS */}
+                <button 
+                  onClick={() => detectarUbicacion(true)} // true = Modo Manual (muestra alertas)
+                  disabled={locating}
+                  className="absolute right-3 top-3 p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition"
+                  title="Use my current location"
+                >
+                  {locating ? (
+                    <span className="animate-spin block">↻</span>
+                  ) : (
+                    <span className="text-xl">📍</span>
+                  )}
+                </button>
 
                 {/* Dropdown de Sugerencias */}
                 {showSuggestions && suggestions.length > 0 && (

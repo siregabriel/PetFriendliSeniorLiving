@@ -1,3 +1,10 @@
+/**
+ * Project: Senior Pet Living
+ * Author: Gabriel Rosales
+ * Date: January 25, 2026
+ * Copyright © 2026 Gabriel Rosales. All rights reserved.
+ */
+
 // app/layout.tsx
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";

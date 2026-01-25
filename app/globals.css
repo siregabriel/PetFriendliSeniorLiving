@@ -19,8 +19,12 @@
   }
 }
 
-/* add z-index 0 to leaflet map to avoid overlay issues */
+/* add z-index 0 to leaflet map to avoid overlay issues -Gabriel */
 .leaflet-container.leaflet-touch-drag.leaflet-touch-zoom {
+  z-index: 0;
+}
+
+.jsx-e671eaf0ec60f002.bg-white.shadow-sm.py-8.px-4.mb-8.relative.z-50 {
   z-index: 0;
 }
 
