@@ -258,8 +258,8 @@ function ContenidoPrincipalInner() {
           </div>
 
           {/* Top content: headline + subtext */}
-          <div className="relative z-10 flex flex-col justify-start px-8 md:px-16 max-w-3xl" style={{ paddingTop: '40px' }}>
-            <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mb-4 whitespace-pre-line" style={{ textShadow: '0 2px 12px rgba(0,0,0,0.6)' }}>
+          <div className="relative z-10 flex flex-col justify-start px-8 md:px-16 max-w-3xl" style={{ paddingTop: '90px', lineHeight: '1' }}>
+            <h1 className="text-3xl md:text-5xl font-bold text-white leading-none mb-4 whitespace-pre-line" style={{ textShadow: '0 2px 12px rgba(0,0,0,0.6)' }}>
               {heroBanner.headline}
             </h1>
           </div>
