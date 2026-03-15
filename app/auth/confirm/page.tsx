@@ -1,13 +1,11 @@
 'use client';
 
-// app/auth/confirm/page.tsx
-// Client-side page that exchanges the OAuth PKCE code for a session.
-
+import { Suspense } from 'react';
 import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-export default function AuthConfirm() {
+function AuthConfirmInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -37,5 +35,13 @@ export default function AuthConfirm() {
         <p className="text-gray-500 text-sm font-medium">Signing you in...</p>
       </div>
     </div>
+  );
+}
+
+export default function AuthConfirm() {
+  return (
+    <Suspense>
+      <AuthConfirmInner />
+    </Suspense>
   );
 }
