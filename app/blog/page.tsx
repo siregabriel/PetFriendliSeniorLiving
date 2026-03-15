@@ -1,4 +1,6 @@
 // app/blog/page.tsx — Server Component (no 'use client')
+export const dynamic = 'force-dynamic';
+
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';

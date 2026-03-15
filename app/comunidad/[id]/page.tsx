@@ -1,4 +1,6 @@
 // app/comunidad/[id]/page.tsx
+export const dynamic = 'force-dynamic';
+
 import { createClient } from '@supabase/supabase-js';
 import { notFound } from 'next/navigation';
 import BotonVolver from '@/components/BotonVolver';

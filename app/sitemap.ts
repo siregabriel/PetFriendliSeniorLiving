@@ -1,10 +1,17 @@
 // app/sitemap.ts
 import { MetadataRoute } from 'next';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { buildArticleSitemapEntries } from './sitemap-utils';
+
+export const dynamic = 'force-dynamic';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = 'https://seniorpetliving.com';
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   // 1. Fetch approved communities
   const { data: comunidades } = await supabase
