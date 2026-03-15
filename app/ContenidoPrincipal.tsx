@@ -275,7 +275,7 @@ function ContenidoPrincipalInner() {
                   </div>
                   <input
                     type="text"
-                    placeholder="Search by city..."
+                    placeholder="Search by city or community name..."
                     className="w-full pl-10 pr-14 py-3.5 rounded-2xl outline-none text-gray-800 text-sm shadow-sm transition-all bg-white/95 border-0 focus:ring-2 focus:ring-white/60"
                     value={busqueda}
                     onChange={(e) => { setBusqueda(e.target.value); setCiudadMapa(null); fetchCitySuggestions(e.target.value); setShowSuggestions(true); }}
