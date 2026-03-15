@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { supabase } from '@/lib/supabase';
 import type { Articulo } from '@/lib/types/articulo';
+import ShareButtons from '@/components/ShareButtons';
 import { shouldReturn404, buildArticleMetadata } from './metadata-utils';
 
 interface Props {
@@ -124,6 +125,9 @@ export default async function ArticleDetailPage({ params }: Props) {
             ))}
           </div>
         )}
+
+        {/* Share buttons */}
+        <ShareButtons title={a.title} />
       </div>
     </main>
   );
