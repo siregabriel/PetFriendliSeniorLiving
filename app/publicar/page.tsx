@@ -5,394 +5,349 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-// 👇 Importamos el botón para mantener consistencia
-import BotonVolver from '@/components/BotonVolver';
+import { DogIcon, CatIcon, BirdIcon, ExoticIcon } from '@/components/PetIcons';
+import { Zap, TrendingUp, Eye, ArrowRight, Star } from 'lucide-react';
+
+const PET_OPTIONS = [
+  { id: 'dog',    label: 'Dogs',   Icon: DogIcon,    color: 'text-blue-500' },
+  { id: 'cat',    label: 'Cats',   Icon: CatIcon,    color: 'text-orange-500' },
+  { id: 'birds',  label: 'Birds',  Icon: BirdIcon,   color: 'text-emerald-500' },
+  { id: 'exotic', label: 'Exotic', Icon: ExoticIcon, color: 'text-purple-500' },
+];
 
 export default function Publicar() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [archivo, setArchivo] = useState<File | null>(null);
-  
-  // 👇 Estado para guardar el ID del usuario dueño
+  const [archivoPreview, setArchivoPreview] = useState<string | null>(null);
+  const [galeriaFiles, setGaleriaFiles] = useState<File[]>([]);
+  const [galeriaPreviews, setGaleriaPreviews] = useState<string[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
-
-  // --- LÓGICA DE AUTOCOMPLETADO ---
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-
-  // Estado para detectar qué botón presionó (Gratis o Pago)
   const [tipoPublicacion, setTipoPublicacion] = useState<'gratis' | 'pago'>('gratis');
-
-  // Estado del formulario
-  const [formData, setFormData] = useState({
-    nombre: '',
-    ciudad: '',
-    estado: '',
-    precio_desde: '',
-    telefono: '', 
-    email: '',
-    descripcion: '',
-  });
-
+  const [formData, setFormData] = useState({ nombre: '', ciudad: '', estado: '', precio_desde: '', telefono: '', email: '', descripcion: '' });
   const [mascotas, setMascotas] = useState<string[]>([]);
 
-  // 👇 1. VERIFICAR SI EL USUARIO ESTÁ LOGUEADO AL ENTRAR
   useEffect(() => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        // Si no hay usuario, mandar al login
-        alert('You must be logged in to publish a community.');
-        router.push('/login');
-      } else {
-        setUserId(user.id);
-      }
+      if (!user) { alert('You must be logged in to publish.'); router.push('/login'); }
+      else setUserId(user.id);
     };
     checkUser();
   }, [router]);
 
-  // Función para buscar sugerencias en Mapbox
   const fetchCitySuggestions = async (query: string) => {
-    if (query.length < 3) {
-      setSuggestions([]);
-      return;
-    }
-
+    if (query.length < 3) { setSuggestions([]); return; }
     const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
     try {
-      const res = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&types=place&country=us&limit=5`
-      );
+      const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&types=place&country=us&limit=5`);
       const data = await res.json();
       setSuggestions(data.features || []);
-    } catch (err) {
-      console.error("Error fetching suggestions:", err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const handleMascotaChange = (tipo: string) => {
-    if (mascotas.includes(tipo)) {
-      setMascotas(mascotas.filter(m => m !== tipo));
-    } else {
-      setMascotas([...mascotas, tipo]);
-    }
+    if (mascotas.includes(tipo)) setMascotas(mascotas.filter(m => m !== tipo));
+    else setMascotas([...mascotas, tipo]);
   };
 
   const buscarCoordenadas = async (ciudad: string, estado: string) => {
     try {
-      const query = `${ciudad}, ${estado}`;
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
-      const data = await response.json();
-      if (data && data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-      return null;
-    } catch (error) {
-      return null;
-    }
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(`${ciudad}, ${estado}`)}`);
+      const data = await res.json();
+      if (data?.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    } catch { }
+    return null;
   };
 
   const subirImagen = async (file: File) => {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}.${fileExt}`;
-    const filePath = `${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('fotos-comunidades')
-      .upload(filePath, file);
-
-    if (uploadError) throw uploadError;
-
-    const { data } = supabase.storage
-      .from('fotos-comunidades')
-      .getPublicUrl(filePath);
-
-    return data.publicUrl;
+    const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${file.name.split('.').pop()}`;
+    const { error } = await supabase.storage.from('fotos-comunidades').upload(fileName, file);
+    if (error) throw error;
+    return supabase.storage.from('fotos-comunidades').getPublicUrl(fileName).data.publicUrl;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleGaleriaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []).slice(0, 8);
+    setGaleriaFiles(files);
+    setGaleriaPreviews(files.map(f => URL.createObjectURL(f)));
+  };
+
+  const removeGaleriaPhoto = (index: number) => {
+    setGaleriaFiles(prev => prev.filter((_, i) => i !== index));
+    setGaleriaPreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!userId) return; // Doble seguridad
+    if (!userId) return;
     setLoading(true);
-
     try {
-        let imageUrlFinal = '';
+      if (!archivo) { alert('Please select a main photo 📸'); setLoading(false); return; }
+      const imageUrlFinal = await subirImagen(archivo);
+      const galeriaUrls = galeriaFiles.length > 0 ? await Promise.all(galeriaFiles.map(f => subirImagen(f))) : [];
+      const coords = await buscarCoordenadas(formData.ciudad, formData.estado);
+      if (!coords) alert('⚠️ Could not find exact city. Approximate location will be used.');
 
-        if (archivo) {
-            imageUrlFinal = await subirImagen(archivo);
-        } else {
-            alert("Please select an image 📸");
-            setLoading(false);
-            return;
-        }
+      const { data: nuevaComunidad, error } = await supabase.from('comunidades').insert([{
+        ...formData, precio_desde: Number(formData.precio_desde), tipo_mascota: mascotas,
+        latitud: coords?.lat ?? 19.4326, longitud: coords?.lon ?? -99.1332,
+        destacada: false, imagen_url: imageUrlFinal, galeria_urls: galeriaUrls,
+        aprobado: false, pagado: false, user_id: userId,
+      }]).select().single();
 
-        const coords = await buscarCoordenadas(formData.ciudad, formData.estado);
-        const latitudFinal = coords ? coords.lat : 19.4326;
-        const longitudFinal = coords ? coords.lon : -99.1332;
+      if (error) throw error;
+      if (!nuevaComunidad) throw new Error('Could not create the record.');
 
-        if (!coords) alert("⚠️ We couldn't find that exact city. An approximate location will be used.");
+      // Admin notification
+      try {
+        await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: 'atlasseniorliving123@gmail.com', subject: '🚨 New Community Submission!',
+            html: `<div style="font-family:sans-serif"><h2>New community pending review</h2><p><strong>${formData.nombre}</strong> — ${formData.ciudad}</p></div>` }) });
+      } catch { }
 
-        const { data: nuevaComunidad, error } = await supabase.from('comunidades').insert([
-        {
-            ...formData,
-            precio_desde: Number(formData.precio_desde),
-            tipo_mascota: mascotas,
-            latitud: latitudFinal,
-            longitud: longitudFinal,
-            destacada: false,
-            imagen_url: imageUrlFinal,
-            aprobado: false, 
-            pagado: false,
-            user_id: userId // 👈 VINCULAMOS AL DUEÑO AQUÍ
-        }
-        ])
-        .select()
-        .single();
+      // Client confirmation
+      try {
+        await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: formData.email, subject: 'We received your submission! 🏡',
+            html: `<div style="font-family:sans-serif;max-width:600px;margin:auto;padding:20px"><h1>Submission Received</h1><p>We received <strong>"${formData.nombre}"</strong> and will review it shortly.</p><p style="color:#888;font-size:12px">Senior Pet Living Team</p></div>` }) });
+      } catch { }
 
-        if (error) throw error;
-        if (!nuevaComunidad) throw new Error("Could not create the record.");
-
-        // --- 1. ENVÍO DE NOTIFICACIÓN POR CORREO AL ADMIN ---
-        try {
-            await fetch('/api/send-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    to: 'atlasseniorliving123@gmail.com', // Correo del Admin
-                    subject: '🚨 New Community Submission!',
-                    html: `
-                        <div style="font-family: sans-serif; color: #333;">
-                            <h2>A new community is waiting for review</h2>
-                            <p><strong>Community Name:</strong> ${formData.nombre}</p>
-                            <p><strong>City:</strong> ${formData.ciudad}</p>
-                            <p><strong>Contact:</strong> ${formData.email}</p>
-                            <hr />
-                            <p>Go to the Admin Dashboard to approve it.</p>
-                        </div>
-                    `
-                })
-            });
-        } catch (emailError) {
-            console.error("Non-critical error: Could not send admin notification", emailError);
-        }
-
-        // --- 2. ENVÍO DE CONFIRMACIÓN AL CLIENTE (NUEVO) ---
-        try {
-            await fetch('/api/send-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    to: formData.email, // Correo que el usuario escribió en el formulario
-                    subject: 'We received your submission! 🏡',
-                    html: `
-                        <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 20px;">
-                            <h1 style="color: #111;">Submission Received</h1>
-                            <p>Hi there,</p>
-                            <p>We have successfully received your property <strong>"${formData.nombre}"</strong>.</p>
-                            <p>Our team is currently reviewing it. You will receive another email once it goes live.</p>
-                            <p style="color: #888; font-size: 12px; margin-top: 20px;">Senior Pet Living Team</p>
-                        </div>
-                    `
-                })
-            });
-        } catch (clientError) {
-            console.error("Non-critical error: Could not send client notification", clientError);
-        }
-
-        if (tipoPublicacion === 'pago') {
-            const response = await fetch('/api/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    comunidadId: nuevaComunidad.id,
-                    nombre: formData.nombre
-                })
-            });
-
-            const stripeData = await response.json();
-
-            if (stripeData.url) {
-                window.location.href = stripeData.url;
-            } else {
-                alert('⚠️ There was an error connecting to the payment system.');
-                setLoading(false);
-            }
-
-        } else {
-            alert('Property submitted successfully! 🥳\n\nYour publication is free and will pass through a moderator before appearing on the map.');
-            // 👇 Redirigir al Dashboard personal
-            router.push('/perfil');
-            router.refresh();
-        }
-
+      if (tipoPublicacion === 'pago') {
+        const response = await fetch('/api/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comunidadId: nuevaComunidad.id, nombre: formData.nombre }) });
+        const stripeData = await response.json();
+        if (stripeData.url) { window.location.href = stripeData.url; }
+        else { alert('⚠️ Error connecting to payment system.'); setLoading(false); }
+      } else {
+        alert('Property submitted! 🥳\nIt will appear on the map after review.');
+        router.push('/perfil'); router.refresh();
+      }
     } catch (error: any) {
-        console.error(error);
-        alert('Error: ' + error.message);
-        setLoading(false);
+      alert('Error: ' + error.message); setLoading(false);
     }
   };
 
-  // 👇 Evita mostrar el formulario si no hay usuario (Loading...)
-  if (!userId) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading...</div>;
+  if (!userId) return (
+    <div className="min-h-screen bg-[#F7F7F7] flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-rose-300 border-t-rose-500 rounded-full animate-spin" />
+    </div>
+  );
+
+  const inputClass = "w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:bg-white focus:border-rose-300 focus:ring-2 focus:ring-rose-100 outline-none text-sm text-gray-800 transition-all";
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 flex justify-center items-center relative">
-      
-      {/* Botón Volver */}
-      <div className="absolute top-4 left-4">
-         <BotonVolver />
+    <div className="min-h-screen bg-[#F7F7F7]">
+
+      {/* HEADER */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/perfil" className="p-2 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-gray-700 transition-all">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"/></svg>
+            </Link>
+            <div>
+              <h1 className="text-lg font-bold text-gray-900">Publish a Community</h1>
+              <p className="text-xs text-gray-400">Fill in the details below</p>
+            </div>
+          </div>
+          <Link href="/perfil" className="text-sm text-gray-400 hover:text-gray-600 transition-colors">Cancel</Link>
+        </div>
       </div>
 
-      <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-2xl border border-gray-100 mt-10">
-        <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800 tracking-tight">Publish New Community</h1>
-            {/* El botón Cancel ahora es redundante con BotonVolver, pero lo dejamos por consistencia de diseño */}
-            <Link href="/perfil" className="text-sm text-gray-500 hover:text-blue-600 transition">Cancel</Link>
-        </div>
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+        <form onSubmit={handleSubmit} className="space-y-6">
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          
-          {/* Nombre */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name of the Community</label>
-            <input required type="text" className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 outline-none transition" 
-              value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} />
+          {/* BASIC INFO */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-5">Basic Info</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Community Name</label>
+                <input required type="text" placeholder="e.g. Sunset Villa Senior Living" className={inputClass}
+                  value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Monthly Price ($)</label>
+                <input required type="number" placeholder="2500" className={inputClass}
+                  value={formData.precio_desde} onChange={e => setFormData({...formData, precio_desde: e.target.value})} />
+              </div>
+            </div>
           </div>
 
-          {/* Ubicación con Sugerencias */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="relative">
-                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                <input 
-                  required 
-                  type="text" 
-                  autoComplete="off"
-                  placeholder="Start typing..."
-                  className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 outline-none transition" 
-                  value={formData.ciudad} 
-                  onChange={e => {
-                    setFormData({...formData, ciudad: e.target.value});
-                    fetchCitySuggestions(e.target.value);
-                    setShowSuggestions(true);
-                  }} 
-                />
-                
-                {/* Dropdown de Sugerencias */}
+          {/* LOCATION */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-5">Location</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">City</label>
+                <input required type="text" autoComplete="off" placeholder="Start typing..." className={inputClass}
+                  value={formData.ciudad}
+                  onChange={e => { setFormData({...formData, ciudad: e.target.value}); fetchCitySuggestions(e.target.value); setShowSuggestions(true); }} />
                 {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden">
+                  <div className="absolute z-50 w-full mt-1.5 bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden">
                     {suggestions.map((s, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition flex flex-col border-b border-gray-50 last:border-0"
-                        onClick={() => {
-                          const cityName = s.text;
-                          const stateName = s.context?.find((c: any) => c.id.startsWith('region'))?.text || "";
-                          setFormData({ ...formData, ciudad: cityName, estado: stateName });
-                          setShowSuggestions(false);
-                        }}
-                      >
-                        <span className="font-bold text-gray-800">{s.text}</span>
+                      <button key={i} type="button" className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition flex flex-col border-b border-gray-50 last:border-0"
+                        onClick={() => { setFormData({...formData, ciudad: s.text, estado: s.context?.find((c: any) => c.id.startsWith('region'))?.text || ''}); setShowSuggestions(false); }}>
+                        <span className="font-semibold text-gray-800">{s.text}</span>
                         <span className="text-xs text-gray-400">{s.place_name.split(',').slice(1).join(',')}</span>
                       </button>
                     ))}
                   </div>
                 )}
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">State / Region</label>
-                <input required type="text" className="w-full p-2 border border-gray-200 bg-gray-50 rounded-lg outline-none" 
-                  value={formData.estado} readOnly placeholder="Auto-filled" />
-            </div>
-          </div>
-
-          {/* Precio y Foto */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Price per Month ($)</label>
-                <input required type="number" className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 outline-none transition" 
-                  value={formData.precio_desde} onChange={e => setFormData({...formData, precio_desde: e.target.value})} />
-            </div>
-            
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Main Photo 📸</label>
-                <input 
-                  type="file" 
-                  accept="image/*"
-                  className="w-full p-1 border border-gray-200 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) {
-                        setArchivo(e.target.files[0]);
-                    }
-                  }} 
-                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">State</label>
+                <input type="text" readOnly placeholder="Auto-filled" className={`${inputClass} bg-gray-50 text-gray-400 cursor-not-allowed`}
+                  value={formData.estado} />
+              </div>
             </div>
           </div>
 
-          {/* Contacto */}
-          <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
-            <h3 className="font-bold text-gray-700 mb-4 text-xs uppercase tracking-widest">Contact Information</h3>
+          {/* PHOTOS */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-5">Photos</h2>
+
+            {/* Main photo */}
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Main Photo</label>
+              <div className="relative border-2 border-dashed border-gray-200 rounded-2xl overflow-hidden hover:border-rose-300 transition-colors cursor-pointer">
+                <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                  onChange={(e) => { if (e.target.files?.[0]) { setArchivo(e.target.files[0]); setArchivoPreview(URL.createObjectURL(e.target.files[0])); } }} />
+                {archivoPreview ? (
+                  <img src={archivoPreview} alt="Preview" className="w-full h-48 object-cover" />
+                ) : (
+                  <div className="h-36 flex flex-col items-center justify-center gap-2 text-gray-400">
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    <span className="text-sm font-medium">Click to upload cover photo</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Gallery */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Gallery <span className="text-gray-400 font-normal">(optional, up to 8)</span></label>
+              {galeriaPreviews.length > 0 && (
+                <div className="grid grid-cols-4 gap-2 mb-3">
+                  {galeriaPreviews.map((src, i) => (
+                    <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border border-gray-100">
+                      <img src={src} alt="" className="w-full h-full object-cover" />
+                      <button type="button" onClick={() => removeGaleriaPhoto(i)}
+                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition">×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-dashed border-gray-200 cursor-pointer hover:bg-gray-100 transition">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                <span className="text-sm text-gray-500">{galeriaFiles.length > 0 ? `${galeriaFiles.length} photo(s) selected` : 'Add gallery photos'}</span>
+                <input type="file" accept="image/*" multiple className="hidden" onChange={handleGaleriaChange} />
+              </label>
+            </div>
+          </div>
+
+          {/* CONTACT */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-5">Contact Info</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp 📞</label>
-                  <input required type="tel" placeholder="e.g. 1..." className="w-full p-2 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-100 outline-none transition" 
-                    value={formData.telefono} onChange={e => setFormData({...formData, telefono: e.target.value})} />
-                  <p className="text-[10px] text-gray-400 mt-1">Country code, no spaces.</p>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">WhatsApp</label>
+                <input required type="tel" placeholder="+1..." className={inputClass}
+                  value={formData.telefono} onChange={e => setFormData({...formData, telefono: e.target.value})} />
+                <p className="text-[11px] text-gray-400 mt-1">Include country code, no spaces</p>
               </div>
               <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email ✉️</label>
-                  <input required type="email" placeholder="contact@example.com" className="w-full p-2 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-100 outline-none transition" 
-                    value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+                <input required type="email" placeholder="contact@example.com" className={inputClass}
+                  value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
               </div>
             </div>
           </div>
 
-          {/* Mascotas */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Allowed Pets</label>
-            <div className="flex gap-4 flex-wrap">
-              {['dog', 'cat', 'birds', 'exotic'].map(tipo => (
-                <label key={tipo} className={`flex items-center space-x-2 cursor-pointer border px-4 py-2 rounded-xl transition ${mascotas.includes(tipo) ? 'bg-blue-50 border-blue-200 shadow-sm' : 'hover:bg-gray-50 border-gray-100'}`}>
-                  <input type="checkbox" 
-                    checked={mascotas.includes(tipo)}
-                    onChange={() => handleMascotaChange(tipo)}
-                    className="rounded text-blue-600 focus:ring-blue-500" 
-                  />
-                  <span className="capitalize text-sm font-medium text-gray-700">{tipo}</span>
-                </label>
-              ))}
+          {/* PETS + DESCRIPTION */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-5">Details</h2>
+
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-gray-700 mb-2.5">Allowed Pets</label>
+              <div className="flex gap-2.5 flex-wrap">
+                {PET_OPTIONS.map(({ id, label, Icon, color }) => (
+                  <label key={id} className={`flex items-center gap-2 px-4 py-2 rounded-xl border cursor-pointer transition-all ${mascotas.includes(id) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-gray-50 border-gray-100 text-gray-600 hover:bg-gray-100'}`}>
+                    <input type="checkbox" checked={mascotas.includes(id)} onChange={() => handleMascotaChange(id)} className="hidden" />
+                    <Icon className={`w-4 h-4 ${mascotas.includes(id) ? 'text-rose-500' : color}`} />
+                    <span className="capitalize text-sm font-medium">{label}</span>
+                    {mascotas.includes(id) && <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7"/></svg>}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+              <textarea required rows={5} placeholder="Describe the community, amenities, pet policies..." className={`${inputClass} resize-none`}
+                value={formData.descripcion} onChange={e => setFormData({...formData, descripcion: e.target.value})} />
             </div>
           </div>
 
-          {/* Descripción */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea required rows={4} className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 outline-none transition resize-none" 
-              value={formData.descripcion} onChange={e => setFormData({...formData, descripcion: e.target.value})} />
-          </div>
+          {/* SUBMIT — PRICING CARDS */}
+          <div className="pb-8 space-y-3">
 
-          {/* --- BOTONES DE ACCIÓN --- */}
-          <div className="pt-6 flex flex-col md:flex-row gap-4">
-             <button 
-                type="submit" 
-                onClick={() => setTipoPublicacion('gratis')}
-                disabled={loading}
-                className="flex-1 bg-white cursor-pointer text-gray-600 font-bold py-4 rounded-xl hover:bg-gray-50 transition border border-gray-200 shadow-sm"
-             >
-                Publish Free
-                <span className="block text-[10px] font-medium opacity-50 mt-1 uppercase tracking-tight">Standard review (24-48h)</span>
-             </button>
+            {/* FEATURED — primary CTA */}
+            <div className="relative rounded-3xl overflow-hidden" style={{ background: '#e5e7eb', padding: '2px' }}>
+              <div className="rounded-[22px] overflow-hidden" style={{ background: '#f3f4f6' }}>
+                {/* "Most popular" badge */}
+                <div className="flex justify-center pt-5">
+                  <span className="flex items-center gap-1.5 bg-gray-800 text-white text-[11px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full">
+                    <Star className="w-3 h-3 text-yellow-400" fill="currentColor" />
+                    Most popular
+                  </span>
+                </div>
+                <div className="px-8 pt-5 pb-2 text-center">
+                  <p className="text-gray-500 text-sm font-medium mb-1">Featured listing</p>
+                  <div className="flex items-baseline justify-center gap-1 mb-1">
+                    <span className="text-5xl font-black text-gray-900">$4.99</span>
+                    <span className="text-gray-400 text-sm">USD</span>
+                  </div>
+                  <p className="text-gray-400 text-xs mb-6">one-time · no subscription</p>
+                  <div className="grid grid-cols-3 gap-3 mb-6">
+                    {[
+                      { Icon: Zap, label: 'Listed in 12h', color: '#f59e0b' },
+                      { Icon: TrendingUp, label: 'Top positions', color: '#10b981' },
+                      { Icon: Eye, label: '3× more views', color: '#6366f1' },
+                    ].map(({ Icon, label, color }) => (
+                      <div key={label} className="bg-white rounded-2xl py-6 px-2 flex flex-col items-center gap-3 shadow-sm border border-gray-100">
+                        <Icon className="w-10 h-10" style={{ color: '#374151' }} strokeWidth={1.75} />
+                        <span className="text-gray-700 text-base font-semibold leading-tight text-center">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="px-6 pb-6">
+                  <button type="submit" onClick={() => setTipoPublicacion('pago')} disabled={loading}
+                    className="w-full py-4 rounded-2xl font-bold text-base text-white transition-all active:scale-[0.98] disabled:opacity-50"
+                    style={{ background: 'linear-gradient(135deg, #f43f5e 0%, #a855f7 100%)' }}>
+                    {loading && tipoPublicacion === 'pago'
+                      ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />Processing...</span>
+                      : <span className="flex items-center justify-center gap-2"><Zap className="w-5 h-5" fill="currentColor" />Get Featured Now</span>}
+                  </button>
+                </div>
+              </div>
+            </div>
 
-             <button 
-                type="submit" 
-                onClick={() => setTipoPublicacion('pago')}
-                disabled={loading}
-                className="flex-1 bg-[#2a7d50] hover:bg-[#276342] cursor-pointer text-white font-bold py-4 rounded-xl transition shadow-lg disabled:opacity-50"
-             >
-                {loading && tipoPublicacion === 'pago' ? 'Processing...' : 'Pay $4.99 USD'}
-                <span className="block text-[10px] font-medium opacity-70 mt-1 uppercase tracking-tight">✨ Highlighted Listing</span>
-                <span className="block text-[10px] font-medium opacity-70 mt-1 uppercase tracking-tight">Listed in 12H. First positions.</span>
-             </button>
+            {/* FREE — secondary */}
+            <button type="submit" onClick={() => setTipoPublicacion('gratis')} disabled={loading}
+              className="w-full group flex items-center justify-between px-6 py-4 rounded-2xl bg-white border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200 disabled:opacity-50">
+              <div className="text-left">
+                <p className="text-xl font-semibold text-gray-700">Publish for free</p>
+                <p className="text-xs text-gray-400 mt-0.5">Standard review · appears in 24–48h</p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
+            </button>
+
           </div>
-        
         </form>
       </div>
     </div>

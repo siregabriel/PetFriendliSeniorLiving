@@ -6,64 +6,72 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 export default function Navbar() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [rol, setRol] = useState<string | null>(null);
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    // Función para buscar los datos del perfil
+    const handleScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
     const fetchProfileData = async (userId: string) => {
       const { data } = await supabase
-        .from('profiles')
-        .select('full_name, avatar_url')
+        .from('perfiles')
+        .select('nombre, avatar_url, rol')
         .eq('id', userId)
         .single();
-
       if (data) {
-        setProfileName(data.full_name);
+        setProfileName(data.nombre);
         setAvatarUrl(data.avatar_url);
+        setRol(data.rol);
       }
     };
 
     const getData = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user || null);
-      if (session?.user) {
-        await fetchProfileData(session.user.id);
-      }
+      if (session?.user) fetchProfileData(session.user.id);
     };
     getData();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
-      if (session?.user) {
-        await fetchProfileData(session.user.id);
-      } else {
-        setProfileName(null);
-        setAvatarUrl(null);
-      }
+      if (session?.user) fetchProfileData(session.user.id);
+      else { setProfileName(null); setAvatarUrl(null); setRol(null); }
     });
 
-    return () => subscription.unsubscribe();
+    const handleProfileUpdated = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) await fetchProfileData(session.user.id);
+    };
+    window.addEventListener('profile-updated', handleProfileUpdated);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('profile-updated', handleProfileUpdated);
+    };
   }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    window.location.reload();
+    setUser(null); setProfileName(null); setAvatarUrl(null); setRol(null);
+    router.push('/login');
   };
 
-  // --- LÓGICA DE NOMBRE Y FORMATO ---
   let displayName = '';
-
   if (profileName) {
-    // 1. Tomamos solo el primer nombre
     const firstWord = profileName.split(' ')[0];
-    // 2. Lo capitalizamos (Primera mayúscula, resto minúscula)
     displayName = firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
   } else if (user?.email) {
-    // Si no hay nombre, usamos el email formateado igual
     const emailName = user.email.split('@')[0];
     displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1).toLowerCase();
   } else {
@@ -71,67 +79,67 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 h-16 flex justify-between items-center">
-        
+    <nav className={`sticky top-0 z-50 transition-all duration-300 ${
+      scrolled
+        ? 'bg-white/90 backdrop-blur-xl shadow-sm border-b border-gray-100'
+        : 'bg-white border-b border-gray-100'
+    }`}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex justify-between items-center">
+
         {/* LOGO */}
-        <Link href="/" className="text-2xl font-bold text-blue-600 flex items-center gap-2">
-          🐶 <span className="hidden md:inline">Senior Pet Living Near Me</span>
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <div className="w-8 h-8 bg-gradient-to-br from-rose-400 to-pink-600 rounded-xl flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
+            <span className="text-sm">🐾</span>
+          </div>
+          <span className="hidden md:block font-bold text-gray-900 text-[15px] tracking-tight">
+            Senior Pet Living
+          </span>
         </Link>
 
-        {/* ENLACES */}
-        <div className="flex items-center gap-4 md:gap-6">
-          <Link href="/" className="text-gray-600 hover:text-blue-600 font-medium text-sm">
+        {/* RIGHT SIDE */}
+        <div className="flex items-center gap-2 md:gap-3">
+          <Link href="/" className="hidden md:block text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-50 transition-all">
             Explore
           </Link>
 
           {user ? (
             <>
-              {/* Botón de Perfil */}
-              <Link 
-                href="/perfil" 
-                className="text-sm font-bold text-blue-900 hover:text-blue-700 cursor-pointer border border-blue-100 px-3 py-1.5 rounded-full bg-blue-50 flex items-center gap-2 transition-colors"
+              <Link
+                href="/perfil"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all bg-white text-sm font-medium text-gray-700"
               >
-                {avatarUrl ? (
-                  <div className="relative w-6 h-6 rounded-full overflow-hidden border border-blue-200">
-                    <Image
-                      src={avatarUrl}
-                      alt="Profile"
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                ) : (
-                  <span className="text-lg">👤</span>
-                )}
-                
-                {/* 👇 AQUÍ ESTÁ EL CAMBIO: Hello Gabriel */}
-                <span className="max-w-[150px] truncate pr-1">
-                  Hello {displayName}
-                </span>
+                <div className="w-6 h-6 rounded-full overflow-hidden bg-gradient-to-br from-rose-100 to-pink-100 flex items-center justify-center border border-gray-100 flex-shrink-0">
+                  {avatarUrl ? (
+                    <Image src={avatarUrl} alt="Profile" width={24} height={24} className="object-cover w-full h-full" />
+                  ) : (
+                    <span className="text-xs font-bold text-rose-500">{displayName.charAt(0)}</span>
+                  )}
+                </div>
+                <span className="max-w-[120px] truncate hidden sm:block">{displayName}</span>
               </Link>
-              
-              <button 
+
+              <button
                 onClick={handleLogout}
-                className="text-gray-500 hover:text-red-600 font-medium text-xs md:text-sm"
+                className="text-xs text-gray-400 hover:text-gray-700 font-medium px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-all"
               >
-                Sign Out
+                Sign out
               </button>
             </>
           ) : (
-            <Link href="/login" className="text-gray-600 hover:text-blue-600 font-medium text-sm">
-              Log In
+            <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-50 transition-all">
+              Log in
             </Link>
           )}
-          
-          <Link 
-            href="/publicar" 
-            className="bg-blue-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-full font-bold hover:bg-blue-700 transition text-xs md:text-sm shadow-sm flex items-center gap-2"
+
+          <Link
+            href="/publicar"
+            className="flex items-center gap-1.5 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white px-4 py-2 rounded-full font-semibold text-sm shadow-sm hover:shadow-md transition-all"
           >
-            <span>+</span> <span className="hidden md:inline">Publish a Community</span><span className="md:hidden">Add</span>
+            <span className="text-base leading-none">+</span>
+            <span className="hidden sm:inline">List Community</span>
+            <span className="sm:hidden">Add</span>
           </Link>
         </div>
-
       </div>
     </nav>
   );

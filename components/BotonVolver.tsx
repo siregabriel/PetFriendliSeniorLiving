@@ -1,22 +1,19 @@
-// components/BotonVolver.tsx
-'use client'; // <--- OBLIGATORIO
+'use client';
 
 import { useRouter } from 'next/navigation';
 
 export default function BotonVolver() {
   const router = useRouter();
 
-  const handleVolver = () => {
-    console.log("Intentando volver atrás..."); // Esto aparecerá en la consola del navegador (F12)
-    router.back();
-  };
-
   return (
-    <button 
-      onClick={handleVolver} 
-      className="text-sm hover:underline mb-4 inline-block opacity-90 hover:opacity-100 cursor-pointer text-white bg-transparent border-none p-0 text-left"
+    <button
+      onClick={() => router.back()}
+      className="flex items-center gap-2 px-3 py-2 rounded-xl glass border border-white/40 text-black text-sm font-medium hover:bg-white/30 transition-all shadow-sm"
     >
-      ← Back to map
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Back
     </button>
   );
 }

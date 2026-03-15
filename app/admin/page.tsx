@@ -4,6 +4,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation'; // Import useRouter
+import type { Articulo, ArticuloForm } from '@/lib/types/articulo';
+import { slugify } from '@/lib/slugify';
+import ModerationQueue from '@/components/ModerationQueue';
 
 // --- DATA TYPES ---
 interface Comunidad {
@@ -19,13 +22,16 @@ interface Comunidad {
   pagado: boolean;
   imagen_url: string;
   tipo_mascota: string[];
+  galeria_urls?: string[];
 }
 
 interface Perfil {
   id: string;
   email: string;
-  rol: 'usuario' | 'admin' | 'super_admin';
+  rol: 'usuario' | 'moderator' | 'admin' | 'super_admin';
 }
+
+type Vista = 'tabla' | 'formulario' | 'usuarios' | 'articulos' | 'articulo-editor' | 'valoraciones';
 
 // --- ICONOS SVG ---
 const IconUsers = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
@@ -46,7 +52,19 @@ export default function AdminDashboard() {
   const [miRol, setMiRol] = useState<string>(''); 
   const [miId, setMiId] = useState<string>(''); 
   const [loading, setLoading] = useState(true);
-  const [vistaActual, setVistaActual] = useState<'tabla' | 'formulario' | 'usuarios'>('tabla');
+  const [vistaActual, setVistaActual] = useState<Vista>('tabla');
+  
+  // Articles state
+  const [articulos, setArticulos] = useState<Articulo[]>([]);
+  const [articuloEditando, setArticuloEditando] = useState<Articulo | null>(null);
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [articuloErrors, setArticuloErrors] = useState<{ title?: string; body?: string; slug?: string }>({});
+  const initialArticuloForm: ArticuloForm = {
+    title: '', slug: '', body: '', excerpt: '', cover_image_url: '',
+    author_name: '', category: '', tags: '', city: '', state: '',
+    meta_title: '', meta_description: '', status: 'draft'
+  };
+  const [articuloForm, setArticuloForm] = useState<ArticuloForm>(initialArticuloForm);
   
   // AUTOCOMPLETE STATE
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -57,6 +75,8 @@ export default function AdminDashboard() {
   const [subiendo, setSubiendo] = useState(false);
   const [archivo, setArchivo] = useState<File | null>(null);
   const [mascotas, setMascotas] = useState<string[]>([]);
+  const [galeriaUrls, setGaleriaUrls] = useState<string[]>([]);
+  const [galeriaFiles, setGaleriaFiles] = useState<File[]>([]);
   
   // Form Users
   const [newUserForm, setNewUserForm] = useState({ email: '', password: '', rol: 'admin' });
@@ -98,7 +118,9 @@ export default function AdminDashboard() {
       if (user) {
         setMiId(user.id);
         const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single();
-        setMiRol(perfil?.rol || 'usuario');
+        const rol = perfil?.rol || 'usuario';
+        setMiRol(rol);
+        if (rol === 'moderator') setVistaActual('articulos');
       } else {
         router.push('/login');
       }
@@ -123,6 +145,94 @@ export default function AdminDashboard() {
     if (miRol !== 'super_admin') return;
     const { data } = await supabase.from('perfiles').select('*').order('email');
     setUsuarios(data || []); 
+  };
+
+  const fetchArticulos = async () => {
+    const { data } = await supabase.from('articulos').select('*').order('created_at', { ascending: false });
+    setArticulos(data || []);
+  };
+
+  const handleEditarArticulo = (a: Articulo) => {
+    setArticuloEditando(a);
+    setArticuloForm({
+      title: a.title,
+      slug: a.slug,
+      body: a.body,
+      excerpt: a.excerpt || '',
+      cover_image_url: a.cover_image_url || '',
+      author_name: a.author_name || '',
+      category: a.category || '',
+      tags: a.tags ? a.tags.join(', ') : '',
+      city: a.city || '',
+      state: a.state || '',
+      meta_title: a.meta_title || '',
+      meta_description: a.meta_description || '',
+      status: a.status,
+    });
+    setSlugManuallyEdited(true); // pre-populated slug should not be auto-overwritten
+    setArticuloErrors({});
+    setVistaActual('articulo-editor');
+  };
+
+  const handleNuevoArticulo = () => {
+    setArticuloEditando(null);
+    setArticuloForm(initialArticuloForm);
+    setSlugManuallyEdited(false);
+    setArticuloErrors({});
+    setVistaActual('articulo-editor');
+  };
+
+  const handleArticuloSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errors: { title?: string; body?: string; slug?: string } = {};
+    if (!articuloForm.title.trim()) errors.title = 'Title is required.';
+    if (!articuloForm.body.trim()) errors.body = 'Body is required.';
+    if (Object.keys(errors).length > 0) {
+      setArticuloErrors(errors);
+      return;
+    }
+    setArticuloErrors({});
+
+    const tagsArray = articuloForm.tags
+      ? articuloForm.tags.split(',').map(t => t.trim()).filter(Boolean)
+      : [];
+
+    const payload = {
+      title: articuloForm.title.trim(),
+      slug: articuloForm.slug.trim(),
+      body: articuloForm.body.trim(),
+      excerpt: articuloForm.excerpt.trim() || null,
+      cover_image_url: articuloForm.cover_image_url.trim() || null,
+      author_name: articuloForm.author_name.trim() || null,
+      category: articuloForm.category.trim() || null,
+      tags: tagsArray.length > 0 ? tagsArray : null,
+      city: articuloForm.city.trim() || null,
+      state: articuloForm.state.trim() || null,
+      meta_title: articuloForm.meta_title.trim() || null,
+      meta_description: articuloForm.meta_description.trim() || null,
+      status: articuloForm.status,
+    };
+
+    let error: any = null;
+    if (articuloEditando) {
+      const result = await supabase.from('articulos').update(payload).eq('id', articuloEditando.id);
+      error = result.error;
+    } else {
+      const result = await supabase.from('articulos').insert([payload]);
+      error = result.error;
+    }
+
+    if (error) {
+      if (error.code === '23505') {
+        setArticuloErrors({ slug: 'This slug is already in use. Please choose a different one.' });
+      } else {
+        setArticuloErrors({ slug: error.message });
+      }
+      return;
+    }
+
+    setVistaActual('articulos');
+    fetchArticulos();
   };
 
   const cambiarRol = async (idUsuario: string, nuevoRol: string) => {
@@ -159,6 +269,8 @@ export default function AdminDashboard() {
       aprobado: c.aprobado, pagado: c.pagado
     });
     setMascotas(c.tipo_mascota || []);
+    setGaleriaUrls(c.galeria_urls || []);
+    setGaleriaFiles([]);
     setVistaActual('formulario');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -169,6 +281,8 @@ export default function AdminDashboard() {
     setFormData(initialFormState);
     setMascotas([]);
     setArchivo(null);
+    setGaleriaUrls([]);
+    setGaleriaFiles([]);
     setShowSuggestions(false);
   };
 
@@ -190,9 +304,22 @@ export default function AdminDashboard() {
         imageUrlFinal = data.publicUrl;
       }
 
+      // Upload any new gallery files and merge with existing URLs
+      let finalGaleriaUrls = [...galeriaUrls];
+      if (galeriaFiles.length > 0) {
+        const uploaded = await Promise.all(galeriaFiles.map(async (file) => {
+          const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${file.name.split('.').pop()}`;
+          const { error } = await supabase.storage.from('fotos-comunidades').upload(fileName, file);
+          if (error) throw error;
+          return supabase.storage.from('fotos-comunidades').getPublicUrl(fileName).data.publicUrl;
+        }));
+        finalGaleriaUrls = [...finalGaleriaUrls, ...uploaded];
+      }
+
       const datosParaGuardar = {
         ...formData, precio_desde: Number(formData.precio_desde), 
-        tipo_mascota: mascotas, imagen_url: imageUrlFinal
+        tipo_mascota: mascotas, imagen_url: imageUrlFinal,
+        galeria_urls: finalGaleriaUrls,
       };
 
       if (editingId) {
@@ -309,8 +436,13 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-3 pr-4 border-r border-gray-100">
                     <span className="text-xs font-medium px-3 py-1 bg-gray-100 rounded-full text-gray-500 uppercase tracking-wider">{miRol.replace('_', ' ')}</span>
-                    <div className="w-8 h-8 bg-gray-200 rounded-full overflow-hidden border border-gray-100">
-                        <img src={`https://ui-avatars.com/api/?name=${miRol}&background=random&color=fff`} alt="Avatar" />
+                    <div className="relative w-8 h-8">
+                        <div className="w-8 h-8 bg-gray-200 rounded-full overflow-hidden border border-gray-100">
+                            <img src={`https://ui-avatars.com/api/?name=${miRol}&background=random&color=fff`} alt="Avatar" />
+                        </div>
+                        {miRol === 'super_admin' && (
+                            <span className="absolute -top-2 -right-1 text-sm leading-none" title="Super Admin">👑</span>
+                        )}
                     </div>
                 </div>
                 
@@ -331,18 +463,38 @@ export default function AdminDashboard() {
         {/* TABS DE NAVEGACIÓN */}
         <div className="flex justify-center mb-10">
             <div className="bg-gray-100/80 p-1 rounded-xl inline-flex shadow-inner">
-                <button 
-                    onClick={() => setVistaActual('tabla')} 
-                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${vistaActual === 'tabla' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                   <IconList /> Communities
-                </button>
-                <button 
-                    onClick={() => { setVistaActual('formulario'); setEditingId(null); setFormData(initialFormState); }} 
-                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${vistaActual === 'formulario' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                   <IconPlus /> New Community
-                </button>
+                {miRol !== 'moderator' && (
+                    <button 
+                        onClick={() => setVistaActual('tabla')} 
+                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${vistaActual === 'tabla' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                       <IconList /> Communities
+                    </button>
+                )}
+                {miRol !== 'moderator' && (
+                    <button 
+                        onClick={() => { setVistaActual('formulario'); setEditingId(null); setFormData(initialFormState); }} 
+                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${vistaActual === 'formulario' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                       <IconPlus /> New Community
+                    </button>
+                )}
+                {(miRol === 'moderator' || miRol === 'admin' || miRol === 'super_admin') && (
+                    <button 
+                        onClick={() => { setVistaActual('articulos'); fetchArticulos(); }} 
+                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${vistaActual === 'articulos' || vistaActual === 'articulo-editor' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                       <IconEdit /> Articles
+                    </button>
+                )}
+                {(miRol === 'moderator' || miRol === 'admin' || miRol === 'super_admin') && (
+                    <button 
+                        onClick={() => setVistaActual('valoraciones')} 
+                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${vistaActual === 'valoraciones' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                       ★ Ratings
+                    </button>
+                )}
                 {miRol === 'super_admin' && (
                     <button 
                         onClick={() => { setVistaActual('usuarios'); fetchUsuarios(); }} 
@@ -375,7 +527,8 @@ export default function AdminDashboard() {
                                 <div className="relative">
                                     <select className="w-full px-4 py-3 bg-gray-50 border-0 rounded-xl focus:ring-2 focus:ring-gray-200 transition-all text-sm outline-none appearance-none" value={newUserForm.rol} onChange={e => setNewUserForm({...newUserForm, rol: e.target.value as any})} >
                                         <option value="usuario">User (Read Only)</option>
-                                        <option value="admin">Moderator</option>
+                                        <option value="moderator">Moderator</option>
+                                        <option value="admin">Admin</option>
                                         <option value="super_admin">Super Admin</option>
                                     </select>
                                     <div className="absolute right-4 top-3.5 pointer-events-none text-gray-400"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg></div>
@@ -425,7 +578,8 @@ export default function AdminDashboard() {
                                                     disabled={u.id === miId}
                                                 >
                                                     <option value="usuario">User</option>
-                                                    <option value="admin">Moderator</option>
+                                                    <option value="moderator">Moderator</option>
+                                                    <option value="admin">Admin</option>
                                                     <option value="super_admin">Super Admin</option>
                                                 </select>
                                             </td>
@@ -546,6 +700,64 @@ export default function AdminDashboard() {
                       </div>
                    </div>
 
+                   {/* Gallery Photos */}
+                   <div>
+                     <label className="text-sm font-medium text-gray-700 mb-3 block">
+                       Gallery Photos
+                       <span className="text-gray-400 font-normal ml-1">(optional, up to 8)</span>
+                     </label>
+                     {/* Existing gallery thumbnails (already uploaded) */}
+                     {galeriaUrls.length > 0 && (
+                       <div className="grid grid-cols-4 gap-2 mb-3">
+                         {galeriaUrls.map((url, i) => (
+                           <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border border-gray-100">
+                             <img src={url} alt={`Gallery ${i + 1}`} className="w-full h-full object-cover" />
+                             <button
+                               type="button"
+                               onClick={() => setGaleriaUrls(prev => prev.filter((_, idx) => idx !== i))}
+                               className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                             >×</button>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                     {/* Preview of newly selected local files */}
+                     {galeriaFiles.length > 0 && (
+                       <div className="grid grid-cols-4 gap-2 mb-3">
+                         {galeriaFiles.map((file, i) => (
+                           <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border-2 border-dashed border-blue-200 bg-blue-50">
+                             <img
+                               src={URL.createObjectURL(file)}
+                               alt={`New photo ${i + 1}`}
+                               className="w-full h-full object-cover"
+                             />
+                             <div className="absolute bottom-0 left-0 right-0 bg-blue-600/70 text-white text-[9px] text-center py-0.5 font-medium">
+                               Pending upload
+                             </div>
+                             <button
+                               type="button"
+                               onClick={() => setGaleriaFiles(prev => prev.filter((_, idx) => idx !== i))}
+                               className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                             >×</button>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                     <label className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-dashed border-gray-200 cursor-pointer hover:bg-gray-100 transition">
+                       <IconPlus />
+                       <span className="text-sm text-gray-500">
+                         {galeriaFiles.length > 0 ? `${galeriaFiles.length} new photo(s) selected` : 'Add more photos'}
+                       </span>
+                       <input
+                         type="file"
+                         accept="image/*"
+                         multiple
+                         className="hidden"
+                         onChange={e => setGaleriaFiles(Array.from(e.target.files || []).slice(0, 8 - galeriaUrls.length))}
+                       />
+                     </label>
+                   </div>
+
                    <div>
                        <label className="text-sm font-medium text-gray-700 mb-3 block">Allowed Pets</label>
                        <div className="flex flex-wrap gap-3">
@@ -575,6 +787,294 @@ export default function AdminDashboard() {
                        </button>
                    </div>
                </div>
+            </form>
+          </div>
+        )}
+
+        {/* --- VISTA: ARTICULOS --- */}
+        {vistaActual === 'articulos' && (
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-8 py-5 border-b border-gray-50 bg-gray-50/50 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-600">Articles</h2>
+              <button
+                onClick={() => handleNuevoArticulo()}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black transition-all"
+              >
+                <IconPlus /> New Article
+              </button>
+            </div>
+            {articulos.length === 0 ? (
+              <div className="p-20 text-center">
+                <div className="inline-block p-4 rounded-full bg-gray-50 text-gray-300 mb-4"><IconList /></div>
+                <p className="text-gray-500 text-lg">No articles yet.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-gray-50/50">
+                    <tr>
+                      <th className="px-8 py-5 text-xs font-bold text-gray-400 uppercase tracking-wider">Title</th>
+                      <th className="px-6 py-5 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Status</th>
+                      <th className="px-6 py-5 text-xs font-bold text-gray-400 uppercase tracking-wider">Published</th>
+                      <th className="px-8 py-5 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {articulos.map((a) => (
+                      <tr key={a.id} className="group hover:bg-gray-50/50 transition-colors">
+                        <td className="px-8 py-5">
+                          <p className="font-medium text-gray-900">{a.title}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{a.slug}</p>
+                        </td>
+                        <td className="px-6 py-5 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                            a.status === 'published'
+                              ? 'bg-green-50 text-green-700 border-green-100'
+                              : 'bg-gray-100 text-gray-500 border-gray-200'
+                          }`}>
+                            {a.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-5 text-sm text-gray-500">
+                          {a.published_at ? new Date(a.published_at).toLocaleDateString() : '—'}
+                        </td>
+                        <td className="px-8 py-5 text-right">
+                          <button
+                            onClick={() => handleEditarArticulo(a)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all ml-auto"
+                          >
+                            <IconEdit /> Edit
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* --- VISTA: ARTICULO-EDITOR --- */}
+        {vistaActual === 'articulo-editor' && (
+          <div className="max-w-3xl mx-auto bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-gray-100">
+            <div className="flex justify-between items-start mb-10 pb-6 border-b border-gray-50">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
+                  {articuloEditando ? 'Edit Article' : 'New Article'}
+                </h2>
+                <p className="text-gray-400 text-sm mt-1">Fill in the details below to save.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleArticuloSubmit} className="space-y-8">
+
+              {/* Core Details */}
+              <div className="space-y-6">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Core Details</h3>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Title</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Best Pet-Friendly Senior Living in Austin"
+                    className={`w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none ${articuloErrors.title ? 'ring-2 ring-red-200' : ''}`}
+                    value={articuloForm.title}
+                    onChange={e => {
+                      const newTitle = e.target.value;
+                      setArticuloForm(prev => ({
+                        ...prev,
+                        title: newTitle,
+                        slug: slugManuallyEdited ? prev.slug : slugify(newTitle),
+                      }));
+                    }}
+                  />
+                  {articuloErrors.title && (
+                    <p className="text-xs text-red-500 mt-1">{articuloErrors.title}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Slug</label>
+                  <input
+                    type="text"
+                    placeholder="auto-generated-from-title"
+                    className={`w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none font-mono text-sm ${articuloErrors.slug ? 'ring-2 ring-red-200' : ''}`}
+                    value={articuloForm.slug}
+                    onChange={e => {
+                      setSlugManuallyEdited(true);
+                      setArticuloForm(prev => ({ ...prev, slug: e.target.value }));
+                    }}
+                  />
+                  {articuloErrors.slug && (
+                    <p className="text-xs text-red-500 mt-1">{articuloErrors.slug}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Excerpt</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Short summary shown in listings..."
+                    className="w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none resize-none"
+                    value={articuloForm.excerpt}
+                    onChange={e => setArticuloForm(prev => ({ ...prev, excerpt: e.target.value }))}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Body</label>
+                  <textarea
+                    rows={10}
+                    placeholder="Write your article content here (markdown supported)..."
+                    className={`w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none resize-y ${articuloErrors.body ? 'ring-2 ring-red-200' : ''}`}
+                    value={articuloForm.body}
+                    onChange={e => setArticuloForm(prev => ({ ...prev, body: e.target.value }))}
+                  />
+                  {articuloErrors.body && (
+                    <p className="text-xs text-red-500 mt-1">{articuloErrors.body}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Media & Attribution */}
+              <div className="space-y-6 pt-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Media & Attribution</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Cover Image URL</label>
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      className="w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none"
+                      value={articuloForm.cover_image_url}
+                      onChange={e => setArticuloForm(prev => ({ ...prev, cover_image_url: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Author Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Jane Smith"
+                      className="w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none"
+                      value={articuloForm.author_name}
+                      onChange={e => setArticuloForm(prev => ({ ...prev, author_name: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Taxonomy */}
+              <div className="space-y-6 pt-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Taxonomy</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Category</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Senior Living Tips"
+                      className="w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none"
+                      value={articuloForm.category}
+                      onChange={e => setArticuloForm(prev => ({ ...prev, category: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Tags <span className="text-gray-400 font-normal">(comma-separated)</span></label>
+                    <input
+                      type="text"
+                      placeholder="e.g. dogs, senior living, texas"
+                      className="w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none"
+                      value={articuloForm.tags}
+                      onChange={e => setArticuloForm(prev => ({ ...prev, tags: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Geo */}
+              <div className="space-y-6 pt-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Geo Targeting</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">City</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Austin"
+                      className="w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none"
+                      value={articuloForm.city}
+                      onChange={e => setArticuloForm(prev => ({ ...prev, city: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">State</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. TX"
+                      className="w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none"
+                      value={articuloForm.state}
+                      onChange={e => setArticuloForm(prev => ({ ...prev, state: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SEO */}
+              <div className="space-y-6 pt-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">SEO Metadata</h3>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Meta Title</label>
+                  <input
+                    type="text"
+                    placeholder="Overrides page title for search engines"
+                    className="w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none"
+                    value={articuloForm.meta_title}
+                    onChange={e => setArticuloForm(prev => ({ ...prev, meta_title: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Meta Description</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Overrides excerpt for search engine snippets..."
+                    className="w-full px-4 py-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-gray-200 transition-all outline-none resize-none"
+                    value={articuloForm.meta_description}
+                    onChange={e => setArticuloForm(prev => ({ ...prev, meta_description: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              {/* Status & Actions */}
+              <div className="flex items-center justify-between pt-8 border-t border-gray-50 gap-4">
+                <button
+                  type="button"
+                  onClick={() => { setVistaActual('articulos'); fetchArticulos(); }}
+                  className="px-6 py-3 text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors"
+                >
+                  Cancel
+                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setArticuloForm(prev => ({
+                      ...prev,
+                      status: prev.status === 'published' ? 'draft' : 'published'
+                    }))}
+                    className={`px-5 py-3 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${
+                      articuloForm.status === 'published'
+                        ? 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+                        : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                    }`}
+                  >
+                    {articuloForm.status === 'published' ? <><IconX /> Unpublish</> : <><IconCheck /> Publish</>}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-8 py-3 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-black transition-all shadow-lg shadow-gray-200"
+                  >
+                    Save Article
+                  </button>
+                </div>
+              </div>
             </form>
           </div>
         )}
@@ -634,6 +1134,17 @@ export default function AdminDashboard() {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* --- VISTA: VALORACIONES (MODERATION QUEUE) --- */}
+        {vistaActual === 'valoraciones' && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">Ratings Moderation</h2>
+              <p className="text-sm text-gray-400 mt-1">Review and approve or reject pending community ratings.</p>
+            </div>
+            <ModerationQueue />
           </div>
         )}
       </div>

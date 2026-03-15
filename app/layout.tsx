@@ -7,14 +7,11 @@
 
 // app/layout.tsx
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 
 // 1. IMPORTAR LOS COMPONENTES
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   // El %s se reemplaza automáticamente por el título de la página interna
@@ -48,7 +45,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={inter.className}>
+      <body className="antialiased">
         
         {/* 2. AGREGAR NAVBAR ARRIBA */}
         <Navbar />
