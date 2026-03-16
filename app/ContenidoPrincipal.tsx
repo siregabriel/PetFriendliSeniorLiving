@@ -267,7 +267,7 @@ function ContenidoPrincipalInner() {
           {/* Search card pinned to bottom of hero — left-aligned under headline */}
           <div className="absolute bottom-0 left-0 right-0 z-10 flex justify-start px-8 md:px-16 pb-16" style={{ overflow: 'visible' }}>
             <div className="rounded-3xl px-6 py-5" style={{ width: '560px', maxWidth: '100%', overflow: 'visible', background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(32px) saturate(180%)', WebkitBackdropFilter: 'blur(32px) saturate(180%)', border: '1px solid rgba(255,255,255,0.45)', boxShadow: '0 8px 32px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(255,255,255,0.15), 0 0 0 0.5px rgba(255,255,255,0.3)' }}>
-              <p className="text-white/80 text-xs font-semibold uppercase tracking-widest mb-3">Find your community</p>
+              <p className="text-white/80 text-s font-semibold tracking-widest mb-2">Find Your Community</p>
               <div className="flex flex-col md:flex-row gap-3 mb-4">
                 <div className="relative flex-[3]">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
@@ -275,7 +275,7 @@ function ContenidoPrincipalInner() {
                   </div>
                   <input
                     type="text"
-                    placeholder="Search by city or community name..."
+                    placeholder="Search by city..."
                     className="w-full pl-10 pr-14 py-3.5 rounded-2xl outline-none text-gray-800 text-sm shadow-sm transition-all bg-white/95 border-0 focus:ring-2 focus:ring-white/60"
                     value={busqueda}
                     onChange={(e) => { setBusqueda(e.target.value); setCiudadMapa(null); fetchCitySuggestions(e.target.value); setShowSuggestions(true); }}
@@ -342,7 +342,7 @@ function ContenidoPrincipalInner() {
         {/* MAP */}
         <div className="mb-8 relative z-0">
           <button onClick={() => setMapaAbierto(prev => !prev)} className="w-full relative overflow-hidden rounded-2xl transition-all duration-300 group">
-            <div className={`absolute inset-0 transition-all duration-300 ${mapaAbierto ? 'bg-gradient-to-r from-slate-100 to-gray-100' : 'bg-gradient-to-r from-slate-50 to-gray-100 group-hover:from-slate-100 group-hover:to-gray-200'}`} />
+            <div className={`absolute inset-0 transition-all duration-300 ${mapaAbierto ? 'bg-gradient-to-r from-slate-100 to-gray-100' : 'bg-gradient-to-r from-slate-50 to-gray-100'}`} />
             <div className="absolute inset-0 opacity-[0.06] pointer-events-none select-none overflow-hidden">
               {['📍','📍','📍','📍','📍','📍','📍','📍','📍','📍','📍','📍'].map((p, i) => (
                 <span key={i} className="absolute text-gray-800 text-lg" style={{ left: `${(i % 6) * 18 + 2}%`, top: `${Math.floor(i / 6) * 55 + 10}%`, transform: `rotate(${(i % 3 - 1) * 8}deg)` }}>{p}</span>
@@ -356,8 +356,8 @@ function ContenidoPrincipalInner() {
                   </svg>
                 </div>
                 <div className="text-left">
-                  <p className="text-gray-800 font-bold text-sm leading-tight">Explore on map</p>
-                  <p className="text-gray-400 text-xs mt-0.5">{comunidadesFiltradas.length} {comunidadesFiltradas.length === 1 ? 'community' : 'communities'} across the US</p>
+                  <p className="text-gray-800 font-bold leading-tight" style={{ fontSize: '28px' }}>Explore on map</p>
+                  <p className="text-gray-400 text-xs mt-0.5"style={{fontSize: '14px', fontWeight:'bolder'}} >{comunidadesFiltradas.length} {comunidadesFiltradas.length === 1 ? 'community' : 'communities'} across the US</p>
                 </div>
                 {ciudadMapa && (
                   <span className="hidden sm:flex items-center gap-1.5 text-xs bg-white text-rose-600 border border-rose-100 px-3 py-1 rounded-full shadow-sm">
@@ -367,7 +367,7 @@ function ContenidoPrincipalInner() {
                 )}
               </div>
               <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-2 shadow-sm">
-                <span className="text-gray-600 text-xs font-semibold">{mapaAbierto ? 'Hide map' : 'Show map'}</span>
+                <span className="text-gray-600 text-s font-semibold">{mapaAbierto ? 'Hide map' : 'Show map'}</span>
                 <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-300 ${mapaAbierto ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"/>
                 </svg>
