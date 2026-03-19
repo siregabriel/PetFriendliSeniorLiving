@@ -24,6 +24,7 @@ interface Comunidad {
   id: number;
   nombre: string;
   ciudad: string;
+  estado: string;
   precio_desde: number;
   tipo_mascota: string[];
   imagen_url: string;
@@ -61,6 +62,97 @@ const categories = [
   { id: 'bird', label: 'Birds', icon: PetIcons.bird, color: 'text-emerald-600', active: 'bg-emerald-500 text-white', inactive: 'bg-white text-emerald-600 hover:bg-emerald-50' },
   { id: 'exotic', label: 'Exotic', icon: PetIcons.exotic, color: 'text-purple-600', active: 'bg-purple-600 text-white', inactive: 'bg-white text-purple-600 hover:bg-purple-50' },
 ];
+
+function SeniorLivingTypes() {
+  const types = [
+    {
+      label: 'Independent Living',
+      sub: 'Pet-Friendly Options',
+      href: '/senior-living/independent-living',
+      img: 'https://images.pexels.com/photos/6131006/pexels-photo-6131006.jpeg?auto=compress&cs=tinysrgb&w=600',
+    },
+    {
+      label: 'Assisted Living',
+      sub: 'Pet-Friendly Options',
+      href: '/senior-living/assisted-living',
+      img: 'https://images.pexels.com/photos/7203956/pexels-photo-7203956.jpeg?auto=compress&cs=tinysrgb&w=600',
+    },
+    {
+      label: 'Memory Care',
+      sub: 'Pet-Friendly Options',
+      href: '/senior-living/memory-care',
+      img: 'https://images.pexels.com/photos/6816861/pexels-photo-6816861.jpeg?auto=compress&cs=tinysrgb&w=600',
+    },
+  ];
+  return (
+    <div className="mb-10">
+      <div className="text-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Types of Senior Living</h2>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {types.map((t) => (
+          <Link key={t.href} href={t.href} className="group block bg-white rounded-3xl overflow-hidden border border-gray-100 card-lift">
+            <div className="h-52 relative overflow-hidden bg-gray-100">
+              <img src={t.img} alt={t.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            </div>
+            <div className="p-4">
+              <h3 className="font-semibold text-gray-900 text-[15px] leading-snug">{t.label}</h3>
+              <p className="text-gray-400 text-sm mt-0.5 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                {t.sub}
+              </p>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StateCards({ comunidades, onSelectState }: { comunidades: Comunidad[]; onSelectState: (estado: string) => void }) {
+  // Group by state, pick one random community image per state
+  const byState = comunidades.reduce<Record<string, Comunidad[]>>((acc, c) => {
+    if (!c.estado) return acc;
+    if (!acc[c.estado]) acc[c.estado] = [];
+    acc[c.estado].push(c);
+    return acc;
+  }, {});
+
+  // Pick 6 states randomly (stable per render via useMemo-like slice)
+  const states = Object.keys(byState).sort(() => 0.5 - Math.random()).slice(0, 4);
+
+  return (
+    <div className="mb-10">
+      <div className="text-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Find Pet-Friendly Senior Living</h2>
+        <p className="text-gray-400 text-sm mt-1">Explore Communities Near You</p>
+      </div>
+      <div className="grid grid-cols-4 gap-5">
+        {states.map((estado) => {
+          const list = byState[estado];
+          const pick = list[Math.floor(Math.random() * list.length)];
+          return (
+            <div key={estado} className="bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+              <div className="h-44 overflow-hidden">
+                <img src={pick.imagen_url} alt={estado} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+              </div>
+              <div className="p-4 pb-5">
+                <p className="font-bold text-gray-900 text-base">{estado}</p>
+                <p className="text-gray-400 text-xs mb-4">Pet-Friendly Communities</p>
+                <button
+                  onClick={() => onSelectState(estado)}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white text-sm font-bold px-6 py-2.5 rounded-full shadow-md hover:shadow-lg transition-all"
+                >
+                  Browse Listings ›
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function CardCarousel({ images, alt }: { images: string[]; alt: string }) {
   const [idx, setIdx] = useState(0);
@@ -104,6 +196,7 @@ function ContenidoPrincipalInner() {
   const [animatingHearts, setAnimatingHearts] = useState<number[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [mapaAbierto, setMapaAbierto] = useState(false);
+  const [filtroEstado, setFiltroEstado] = useState<string | null>(null);
   const [iconAnimKey, setIconAnimKey] = useState<Record<string, number>>({});
   const [ratingSummaries, setRatingSummaries] = useState<Record<string, RatingSummaryData>>({});
 
@@ -212,6 +305,7 @@ function ContenidoPrincipalInner() {
       if (data) {
         const sanitized: Comunidad[] = data.map((item: any) => ({
           id: item.id, nombre: item.nombre || 'Untitled', ciudad: item.ciudad || '',
+          estado: item.estado || '',
           precio_desde: Number(item.precio_desde) || 0,
           tipo_mascota: Array.isArray(item.tipo_mascota) ? item.tipo_mascota : [],
           imagen_url: item.imagen_url || '', destacada: !!item.destacada,
@@ -264,7 +358,8 @@ function ContenidoPrincipalInner() {
     const ciudadMapaCoincide = ciudadMapa ? ciudad === ciudadMapa : true;
     const precioMinCoincide = minPrecio ? c.precio_desde >= Number(minPrecio) : true;
     const precioMaxCoincide = maxPrecio ? c.precio_desde <= Number(maxPrecio) : true;
-    return textoCoincide && mascotaCoincide && ciudadMapaCoincide && precioMinCoincide && precioMaxCoincide;
+    const estadoCoincide = filtroEstado ? c.estado === filtroEstado : true;
+    return textoCoincide && mascotaCoincide && ciudadMapaCoincide && precioMinCoincide && precioMaxCoincide && estadoCoincide;
   });
 
   const handleFiltrarCiudad = (ciudad: string) => { setCiudadMapa(ciudad); window.scrollTo({ top: 500, behavior: 'smooth' }); };
@@ -318,7 +413,7 @@ function ContenidoPrincipalInner() {
                     placeholder="Search by city..."
                     className="w-full pl-10 pr-14 py-3.5 rounded-2xl outline-none text-gray-800 text-sm shadow-sm transition-all bg-white/95 border-0 focus:ring-2 focus:ring-white/60"
                     value={busqueda}
-                    onChange={(e) => { setBusqueda(e.target.value); setCiudadMapa(null); fetchCitySuggestions(e.target.value); setShowSuggestions(true); }}
+                    onChange={(e) => { setBusqueda(e.target.value); setCiudadMapa(null); setFiltroEstado(null); fetchCitySuggestions(e.target.value); setShowSuggestions(true); }}
                     onFocus={() => setShowSuggestions(true)}
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   />
@@ -386,6 +481,15 @@ function ContenidoPrincipalInner() {
       )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+
+        {/* STATE BROWSE — shown when no active search/filter */}
+        {!filtroEstado && !busqueda && filtroMascota === 'todos' && !minPrecio && !maxPrecio && (
+          <>
+            <StateCards comunidades={comunidades} onSelectState={(estado) => { setFiltroEstado(estado); window.scrollTo({ top: 600, behavior: 'smooth' }); }} />
+            <SeniorLivingTypes />
+          </>
+        )}
+
         {/* MAP */}
         <div className="mb-8 relative z-0">
           <button onClick={() => setMapaAbierto(prev => !prev)} className="w-full relative overflow-hidden rounded-2xl transition-all duration-300 group">
@@ -433,7 +537,13 @@ function ContenidoPrincipalInner() {
           <h3 className="text-sm font-semibold text-gray-500">
             <span className="text-gray-900 font-bold text-base">{comunidadesFiltradas.length}</span> communities found
             {ciudadMapa && <span className="text-rose-500"> in {ciudadMapa}</span>}
+            {filtroEstado && <span className="text-rose-500"> in {filtroEstado}</span>}
           </h3>
+          {filtroEstado && (
+            <button onClick={() => setFiltroEstado(null)} className="flex items-center gap-1.5 text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full hover:border-rose-300 hover:text-rose-500 transition-colors shadow-sm">
+              ✕ Clear state filter
+            </button>
+          )}
         </div>
 
         {/* GRID */}
@@ -526,7 +636,7 @@ function ContenidoPrincipalInner() {
               <div className="col-span-full text-center py-16 bg-white rounded-3xl border border-dashed border-gray-200">
                 <div className="text-4xl mb-3">🐾</div>
                 <p className="text-gray-500 font-medium mb-2">No communities found</p>
-                <button onClick={() => { setBusqueda(''); setFiltroMascota('todos'); setMinPrecio(''); setMaxPrecio(''); setCiudadMapa(null); }}
+                <button onClick={() => { setBusqueda(''); setFiltroMascota('todos'); setMinPrecio(''); setMaxPrecio(''); setCiudadMapa(null); setFiltroEstado(null); }}
                   className="text-rose-500 text-sm font-semibold hover:underline mt-1">Clear all filters</button>
               </div>
             )}
