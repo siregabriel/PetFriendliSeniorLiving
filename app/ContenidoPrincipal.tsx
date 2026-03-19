@@ -30,6 +30,7 @@ interface Comunidad {
   destacada: boolean;
   latitud?: number;
   longitud?: number;
+  galeria_urls?: string[];
 }
 
 let cachedComunidades: Comunidad[] | null = null;
@@ -61,6 +62,29 @@ const categories = [
   { id: 'exotic', label: 'Exotic', icon: PetIcons.exotic, color: 'text-purple-600', active: 'bg-purple-600 text-white', inactive: 'bg-white text-purple-600 hover:bg-purple-50' },
 ];
 
+function CardCarousel({ images, alt }: { images: string[]; alt: string }) {
+  const [idx, setIdx] = useState(0);
+  const prev = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setIdx((i) => (i - 1 + images.length) % images.length); };
+  const next = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setIdx((i) => (i + 1) % images.length); };
+  return (
+    <div className="w-full h-full relative">
+      <img src={images[idx]} alt={`${alt} ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+      <button onClick={prev} className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 hover:bg-white text-gray-800 flex items-center justify-center shadow-md z-10 transition-all">
+        <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <button onClick={next} className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 hover:bg-white text-gray-800 flex items-center justify-center shadow-md z-10 transition-all">
+        <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </button>
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 z-10">
+        {images.map((_, i) => (
+          <button key={i} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIdx(i); }}
+            className={`w-1.5 h-1.5 rounded-full transition-all ${i === idx ? 'bg-white scale-125' : 'bg-white/50'}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ContenidoPrincipalInner() {
   const [comunidades, setComunidades] = useState<Comunidad[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +99,7 @@ function ContenidoPrincipalInner() {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [favoritos, setFavoritos] = useState<Set<number>>(new Set());
   const [animatingHearts, setAnimatingHearts] = useState<number[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
@@ -140,8 +165,12 @@ function ContenidoPrincipalInner() {
 
   const detectarUbicacion = (esManual = false) => {
     if (!esManual && cachedUserCity) { setBusqueda(cachedUserCity); return; }
-    if (!navigator.geolocation) { if (esManual) alert("Geolocation not supported"); return; }
+    if (!navigator.geolocation) {
+      if (esManual) setLocationError("Geolocation is not supported by your browser.");
+      return;
+    }
     setLocating(true);
+    setLocationError(null);
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
       const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
@@ -153,9 +182,19 @@ function ContenidoPrincipalInner() {
           const ciudad = cityFeature ? cityFeature.text : '';
           if (ciudad) { cachedUserCity = ciudad; setBusqueda(ciudad); }
         }
-      } catch (e) { if (esManual) alert("Error finding location."); }
-      finally { setLocating(false); }
-    }, () => { if (esManual) alert("Unable to retrieve location."); setLocating(false); });
+      } catch (e) {
+        if (esManual) setLocationError("Could not determine your city. Please type it manually.");
+      } finally { setLocating(false); }
+    }, (err) => {
+      if (esManual) {
+        if (err.code === err.PERMISSION_DENIED) {
+          setLocationError("Location access was denied. Please allow it in your browser settings.");
+        } else {
+          setLocationError("Unable to retrieve your location. Please type your city manually.");
+        }
+      }
+      setLocating(false);
+    });
   };
 
   useEffect(() => {
@@ -177,6 +216,7 @@ function ContenidoPrincipalInner() {
           tipo_mascota: Array.isArray(item.tipo_mascota) ? item.tipo_mascota : [],
           imagen_url: item.imagen_url || '', destacada: !!item.destacada,
           latitud: Number(item.latitud) || 0, longitud: Number(item.longitud) || 0,
+          galeria_urls: Array.isArray(item.galeria_urls) ? item.galeria_urls : [],
         }));
         setComunidades(sanitized); cachedComunidades = sanitized;
 
@@ -285,6 +325,13 @@ function ContenidoPrincipalInner() {
                   <button onClick={() => detectarUbicacion(true)} disabled={locating} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-xl hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-all" title="Use my location">
                     {locating ? <span className="animate-spin block text-sm">↻</span> : <span className="text-base">📍</span>}
                   </button>
+                  {locationError && (
+                    <div className="absolute top-full left-0 right-0 mt-2 z-[100] bg-white border border-red-100 rounded-2xl shadow-lg px-4 py-3 flex items-start gap-2">
+                      <span className="text-red-400 mt-0.5 flex-shrink-0">⚠️</span>
+                      <p className="text-xs text-gray-600 flex-1">{locationError}</p>
+                      <button onClick={() => setLocationError(null)} className="text-gray-300 hover:text-gray-500 text-xs flex-shrink-0">✕</button>
+                    </div>
+                  )}
                   {showSuggestions && suggestions.length > 0 && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden z-[100]">
                       {suggestions.map((s, i) => (
@@ -342,7 +389,7 @@ function ContenidoPrincipalInner() {
         {/* MAP */}
         <div className="mb-8 relative z-0">
           <button onClick={() => setMapaAbierto(prev => !prev)} className="w-full relative overflow-hidden rounded-2xl transition-all duration-300 group">
-            <div className={`absolute inset-0 transition-all duration-300 ${mapaAbierto ? 'bg-gradient-to-r from-slate-100 to-gray-100' : 'bg-gradient-to-r from-slate-50 to-gray-100'}`} />
+            <div className={`absolute inset-0 transition-all duration-300 ${mapaAbierto ? 'bg-gradient-to-r from-slate-100 to-white-100' : 'bg-gradient-to-r from-slate-50 to-white-100'}`} />
             <div className="absolute inset-0 opacity-[0.06] pointer-events-none select-none overflow-hidden">
               {['📍','📍','📍','📍','📍','📍','📍','📍','📍','📍','📍','📍'].map((p, i) => (
                 <span key={i} className="absolute text-gray-800 text-lg" style={{ left: `${(i % 6) * 18 + 2}%`, top: `${Math.floor(i / 6) * 55 + 10}%`, transform: `rotate(${(i % 3 - 1) * 8}deg)` }}>{p}</span>
@@ -410,7 +457,10 @@ function ContenidoPrincipalInner() {
               return (
                 <Link key={comunidad.id} href={`/comunidad/${comunidad.id}`} className="group block bg-white rounded-3xl overflow-hidden border border-gray-100 card-lift">
                   <div className="h-52 relative overflow-hidden bg-gray-100">
-                    <img src={comunidad.imagen_url} alt={comunidad.nombre} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    {comunidad.galeria_urls && comunidad.galeria_urls.length > 0
+                      ? <CardCarousel images={[comunidad.imagen_url, ...comunidad.galeria_urls].filter(Boolean)} alt={comunidad.nombre} />
+                      : <img src={comunidad.imagen_url} alt={comunidad.nombre} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    }
                     <button onClick={(e) => toggleFavorite(e, comunidad.id)} className="absolute top-3 right-3 z-30 p-2 rounded-full glass shadow-sm hover:scale-110 active:scale-95 transition-all" style={{ border: '1.5px solid #fbcfe8' }}>
                       <svg xmlns="http://www.w3.org/2000/svg" fill={isFav ? "#ef4444" : "none"} viewBox="0 0 24 24" strokeWidth={1.5} stroke={isFav ? "#ef4444" : "#fbcfe8"} className="w-5 h-5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
